@@ -18,6 +18,11 @@ import {
 } from "@/lib/types";
 
 const DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT"];
+const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
+
+function apiPath(path: string) {
+  return `${BASE_PATH}${path}`;
+}
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, {
@@ -48,7 +53,7 @@ export function Dashboard() {
   useEffect(() => {
     let active = true;
 
-    fetchJson<SymbolsResponse>("/api/symbols")
+    fetchJson<SymbolsResponse>(apiPath("/api/symbols"))
       .then((payload) => {
         if (!active) {
           return;
@@ -87,11 +92,11 @@ export function Dashboard() {
       try {
         const [analysisPayload, klinesPayload] = await Promise.all([
           fetchJson<OverallAnalysis>(
-            `/api/analysis?symbol=${encodeURIComponent(symbol)}&interval=${interval}`,
+            apiPath(`/api/analysis?symbol=${encodeURIComponent(symbol)}&interval=${interval}`),
             signal
           ),
           fetchJson<KlinesResponse>(
-            `/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=240`,
+            apiPath(`/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=240`),
             signal
           )
         ]);
