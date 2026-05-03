@@ -9,6 +9,8 @@ import { OverallSignalCard } from "@/components/OverallSignalCard";
 import { PriceChart } from "@/components/PriceChart";
 import { RiskWarningCard } from "@/components/RiskWarningCard";
 import { SymbolSelector } from "@/components/SymbolSelector";
+import { PatternDetectionCard } from "@/components/patterns/PatternDetectionCard";
+import { HistoricalPatternMatcher } from "@/components/patterns/HistoricalPatternMatcher";
 import {
   Interval,
   Kline,
@@ -16,6 +18,10 @@ import {
   OverallAnalysis,
   SymbolsResponse
 } from "@/lib/types";
+import {
+  PatternDetectionResponse,
+  PatternMatchResponse
+} from "@/lib/patterns/patternTypes";
 
 const DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT"];
 const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
@@ -37,12 +43,31 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function fetchOptionalJson<T>(
+  url: string,
+  fallback: T,
+  signal?: AbortSignal
+): Promise<T> {
+  try {
+    return await fetchJson<T>(url, signal);
+  } catch (error) {
+    if ((error as Error).name === "AbortError") {
+      throw error;
+    }
+
+    return fallback;
+  }
+}
+
 export function Dashboard() {
   const [symbols, setSymbols] = useState(DEFAULT_SYMBOLS);
   const [symbol, setSymbol] = useState("BTCUSDT");
   const [interval, setInterval] = useState<Interval>("4h");
   const [analysis, setAnalysis] = useState<OverallAnalysis | null>(null);
   const [klines, setKlines] = useState<Kline[]>([]);
+  const [patterns, setPatterns] = useState<PatternDetectionResponse | null>(null);
+  const [patternMatches, setPatternMatches] =
+    useState<PatternMatchResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [symbolsLoading, setSymbolsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +115,8 @@ export function Dashboard() {
       setError(null);
 
       try {
-        const [analysisPayload, klinesPayload] = await Promise.all([
+        const [analysisPayload, klinesPayload, patternsPayload, matchesPayload] =
+          await Promise.all([
           fetchJson<OverallAnalysis>(
             apiPath(`/api/analysis?symbol=${encodeURIComponent(symbol)}&interval=${interval}`),
             signal
@@ -98,11 +124,29 @@ export function Dashboard() {
           fetchJson<KlinesResponse>(
             apiPath(`/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=240`),
             signal
+          ),
+          fetchOptionalJson<PatternDetectionResponse | null>(
+            apiPath(
+              `/api/patterns/detect?symbol=${encodeURIComponent(symbol)}&interval=${interval}`
+            ),
+            null,
+            signal
+          ),
+          fetchOptionalJson<PatternMatchResponse | null>(
+            apiPath(
+              `/api/patterns/match?symbol=${encodeURIComponent(
+                symbol
+              )}&interval=${interval}&lookback=60&topK=20`
+            ),
+            null,
+            signal
           )
         ]);
 
         setAnalysis(analysisPayload);
         setKlines(klinesPayload.klines);
+        setPatterns(patternsPayload);
+        setPatternMatches(matchesPayload);
       } catch (loadError) {
         if ((loadError as Error).name === "AbortError") {
           return;
@@ -194,6 +238,11 @@ export function Dashboard() {
                 <IndicatorModuleCard key={module.key} module={module} />
               ))}
             </div>
+            <PatternDetectionCard
+              loading={loading}
+              patterns={patterns?.patterns ?? []}
+            />
+            <HistoricalPatternMatcher data={patternMatches} loading={loading} />
             <RiskWarningCard warnings={analysis.warnings} />
             <IndicatorExplanationTable modules={analysis.modules} />
           </>
