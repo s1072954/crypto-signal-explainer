@@ -1,4 +1,10 @@
 import { Interval, Kline } from "@/lib/types";
+import {
+  isPlausiblePriceAgainstReference,
+  isPositiveFiniteNumber,
+  isValidKline,
+  normalizeKlines
+} from "@/lib/klineGuards";
 
 export interface TradeTick {
   id: number;
@@ -94,6 +100,23 @@ function createKlineFromTrade(trade: TradeTick, interval: Interval): Kline {
   };
 }
 
+function isValidTrade(trade: TradeTick) {
+  return (
+    Number.isFinite(trade.id) &&
+    isPositiveFiniteNumber(trade.price) &&
+    isPositiveFiniteNumber(trade.quantity) &&
+    Number.isFinite(trade.timestamp) &&
+    trade.timestamp > 0
+  );
+}
+
+function isPlausibleTrade(trade: TradeTick, reference?: Kline) {
+  return isPlausiblePriceAgainstReference(
+    trade.price,
+    reference?.close ?? trade.price
+  );
+}
+
 export function aggregateTradesIntoKlines(
   klines: Kline[],
   trades: TradeTick[],
@@ -101,17 +124,25 @@ export function aggregateTradesIntoKlines(
   limit = 240
 ) {
   if (!trades.length) {
-    return klines;
+    return normalizeKlines(klines).slice(-limit);
   }
 
-  const next = [...klines];
+  const next = normalizeKlines(klines);
   const orderedTrades = [...trades].sort((a, b) => a.timestamp - b.timestamp);
 
   for (const trade of orderedTrades) {
+    if (!isValidTrade(trade)) {
+      continue;
+    }
+
     const openTime = intervalOpenTime(trade.timestamp, interval);
     const existingIndex = next.findIndex((kline) => kline.openTime === openTime);
 
     if (existingIndex >= 0) {
+      if (!isPlausibleTrade(trade, next[existingIndex])) {
+        continue;
+      }
+
       next[existingIndex] = applyTradeToKline(next[existingIndex], trade);
       continue;
     }
@@ -122,8 +153,16 @@ export function aggregateTradesIntoKlines(
       continue;
     }
 
-    next.push(createKlineFromTrade(trade, interval));
+    if (last && !isPlausibleTrade(trade, last)) {
+      continue;
+    }
+
+    const kline = createKlineFromTrade(trade, interval);
+
+    if (isValidKline(kline)) {
+      next.push(kline);
+    }
   }
 
-  return next.slice(-limit);
+  return normalizeKlines(next).slice(-limit);
 }

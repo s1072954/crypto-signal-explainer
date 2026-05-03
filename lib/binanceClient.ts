@@ -11,6 +11,7 @@ import {
   RatioPoint,
   Ticker24hr
 } from "@/lib/types";
+import { normalizeKlines } from "@/lib/klineGuards";
 
 const SPOT_BASE_URL = "https://api.binance.com/api/v3";
 const FUTURES_BASE_URL = "https://fapi.binance.com/fapi/v1";
@@ -208,7 +209,7 @@ export async function getMarketKlines(
   });
 
   const rows = await fetchJson<BinanceKline[]>(url, 20_000);
-  return rows.map(mapKline);
+  return normalizeKlines(rows.map(mapKline));
 }
 
 export async function getSpotKlines(

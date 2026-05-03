@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   ColorType,
   createChart,
@@ -10,6 +10,7 @@ import {
 } from "lightweight-charts";
 import { BarChart3, Radio } from "lucide-react";
 import { calculateMA } from "@/lib/indicators";
+import { normalizeKlines } from "@/lib/klineGuards";
 import { Kline, MarketType } from "@/lib/types";
 
 interface PriceChartProps {
@@ -69,9 +70,10 @@ export function PriceChart({
   const ma20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const ma50SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const didFitContentRef = useRef(false);
+  const chartKlines = useMemo(() => normalizeKlines(klines), [klines]);
 
   useEffect(() => {
-    if (!containerRef.current || chartRef.current || !klines.length) {
+    if (!containerRef.current || chartRef.current || !chartKlines.length) {
       return;
     }
 
@@ -121,7 +123,9 @@ export function PriceChart({
       priceFormat: {
         type: "volume"
       },
-      priceScaleId: "volume"
+      priceScaleId: "volume",
+      lastValueVisible: false,
+      priceLineVisible: false
     });
     const ma20Series = chart.addLineSeries({
       color: "#2563eb",
@@ -156,11 +160,11 @@ export function PriceChart({
       ma50SeriesRef.current = null;
       didFitContentRef.current = false;
     };
-  }, [klines.length]);
+  }, [chartKlines.length]);
 
   useEffect(() => {
     if (
-      !klines.length ||
+      !chartKlines.length ||
       !chartRef.current ||
       !candleSeriesRef.current ||
       !volumeSeriesRef.current ||
@@ -171,7 +175,7 @@ export function PriceChart({
     }
 
     candleSeriesRef.current.setData(
-      klines.map((kline) => ({
+      chartKlines.map((kline) => ({
         time: toChartTime(kline.openTime),
         open: kline.open,
         high: kline.high,
@@ -180,7 +184,7 @@ export function PriceChart({
       }))
     );
     volumeSeriesRef.current.setData(
-      klines.map((kline) => ({
+      chartKlines.map((kline) => ({
         time: toChartTime(kline.openTime),
         value: kline.volume,
         color:
@@ -190,13 +194,13 @@ export function PriceChart({
       }))
     );
     ma20SeriesRef.current.setData(
-      calculateMA(klines, 20).map((point) => ({
+      calculateMA(chartKlines, 20).map((point) => ({
         time: toChartTime(point.time),
         value: point.value
       }))
     );
     ma50SeriesRef.current.setData(
-      calculateMA(klines, 50).map((point) => ({
+      calculateMA(chartKlines, 50).map((point) => ({
         time: toChartTime(point.time),
         value: point.value
       }))
@@ -206,11 +210,11 @@ export function PriceChart({
       chartRef.current.timeScale().fitContent();
       didFitContentRef.current = true;
     }
-  }, [klines]);
+  }, [chartKlines]);
 
   useEffect(() => {
     didFitContentRef.current = false;
-  }, [symbol]);
+  }, [market, symbol]);
 
   return (
     <section className="min-h-[34rem] rounded-lg border border-line bg-panel p-4 shadow-soft">
@@ -251,7 +255,7 @@ export function PriceChart({
       </div>
 
       <div className="relative h-[460px] min-h-[460px] overflow-hidden rounded-md border border-slate-100 bg-white">
-        {klines.length ? (
+        {chartKlines.length ? (
           <div ref={containerRef} className="h-full w-full" />
         ) : (
           <div className="flex h-full items-center justify-center text-slate-500">

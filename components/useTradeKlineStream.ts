@@ -100,8 +100,11 @@ export function useTradeKlineStream({
 
           if (
             !Number.isFinite(price) ||
+            price <= 0 ||
             !Number.isFinite(quantity) ||
-            !Number.isFinite(timestamp)
+            quantity <= 0 ||
+            !Number.isFinite(timestamp) ||
+            timestamp <= 0
           ) {
             return;
           }
