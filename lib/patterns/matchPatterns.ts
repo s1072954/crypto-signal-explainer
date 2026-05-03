@@ -61,6 +61,7 @@ export function buildHistoricalPatternMatches(
   for (let start = 0; start + safeLookback + horizon < latestQueryStart; start += 1) {
     const end = start + safeLookback - 1;
     const window = klines.slice(start, start + safeLookback);
+    const futureWindow = klines.slice(end + 1, end + horizon + 1);
     const candidateCloses = window.map((kline) => kline.close);
     const { similarityScore, correlation, distance } = calculateSimilarityScore(
       queryCloses,
@@ -81,7 +82,8 @@ export function buildHistoricalPatternMatches(
       futureReturn24: roundStat(futureReturn(klines, end, 24)),
       maxFutureUpside: roundStat(extremes.maxFutureUpside),
       maxFutureDrawdown: roundStat(extremes.maxFutureDrawdown),
-      window
+      window,
+      futureWindow
     });
   }
 

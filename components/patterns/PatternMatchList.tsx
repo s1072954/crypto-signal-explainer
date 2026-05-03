@@ -1,8 +1,12 @@
-import { HelpCircle } from "lucide-react";
+"use client";
+
+import { HelpCircle, MousePointerClick } from "lucide-react";
 import { PatternMatch } from "@/lib/patterns/patternTypes";
 
 interface PatternMatchListProps {
   matches: PatternMatch[];
+  selectedMatchKey?: string | null;
+  onSelectMatch?: (match: PatternMatch) => void;
 }
 
 function formatDate(timestamp: number) {
@@ -39,7 +43,15 @@ function HeaderWithHelp({
   );
 }
 
-export function PatternMatchList({ matches }: PatternMatchListProps) {
+function matchKey(match: PatternMatch) {
+  return `${match.startTime}-${match.endTime}`;
+}
+
+export function PatternMatchList({
+  matches,
+  selectedMatchKey,
+  onSelectMatch
+}: PatternMatchListProps) {
   return (
     <section className="rounded-lg border border-line bg-panel p-5 shadow-soft">
       <h2 className="mb-4 text-lg font-semibold tracking-normal text-ink">Top 相似樣本</h2>
@@ -92,31 +104,55 @@ export function PatternMatchList({ matches }: PatternMatchListProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {matches.map((match) => (
-              <tr key={`${match.startTime}-${match.endTime}`}>
-                <td className="py-3 pr-4 text-slate-700">
-                  {formatDate(match.startTime)}
-                </td>
-                <td className="py-3 pr-4 font-semibold text-ink">
-                  {(match.similarityScore * 100).toFixed(1)}%
-                </td>
-                <td className="py-3 pr-4 text-slate-700">
-                  {formatPercent(match.futureReturn6)}
-                </td>
-                <td className="py-3 pr-4 text-slate-700">
-                  {formatPercent(match.futureReturn12)}
-                </td>
-                <td className="py-3 pr-4 text-slate-700">
-                  {formatPercent(match.futureReturn24)}
-                </td>
-                <td className="py-3 pr-4 text-emerald-700">
-                  {formatPercent(match.maxFutureUpside)}
-                </td>
-                <td className="py-3 text-rose-700">
-                  {formatPercent(match.maxFutureDrawdown)}
-                </td>
-              </tr>
-            ))}
+            {matches.map((match) => {
+              const key = matchKey(match);
+              const selected = selectedMatchKey === key;
+
+              return (
+                <tr
+                  key={key}
+                  className={
+                    selected
+                      ? "bg-teal-50/70"
+                      : "transition-colors hover:bg-slate-50"
+                  }
+                >
+                  <td className="py-3 pr-4">
+                    <button
+                      className={`inline-flex items-center gap-2 rounded px-2 py-1 text-sm font-semibold transition ${
+                        selected
+                          ? "bg-teal-100 text-teal-800"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-ink"
+                      }`}
+                      title="在主 K 線圖顯示這筆相似樣本的後續投影"
+                      type="button"
+                      onClick={() => onSelectMatch?.(match)}
+                    >
+                      <MousePointerClick className="h-3.5 w-3.5" aria-hidden="true" />
+                      {formatDate(match.startTime)}
+                    </button>
+                  </td>
+                  <td className="py-3 pr-4 font-semibold text-ink">
+                    {(match.similarityScore * 100).toFixed(1)}%
+                  </td>
+                  <td className="py-3 pr-4 text-slate-700">
+                    {formatPercent(match.futureReturn6)}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-700">
+                    {formatPercent(match.futureReturn12)}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-700">
+                    {formatPercent(match.futureReturn24)}
+                  </td>
+                  <td className="py-3 pr-4 text-emerald-700">
+                    {formatPercent(match.maxFutureUpside)}
+                  </td>
+                  <td className="py-3 text-rose-700">
+                    {formatPercent(match.maxFutureDrawdown)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

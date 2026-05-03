@@ -23,6 +23,7 @@ import {
 } from "@/lib/types";
 import {
   PatternDetectionResponse,
+  PatternMatch,
   PatternMatchResponse
 } from "@/lib/patterns/patternTypes";
 import { aggregateTradesIntoKlines, TradeTick } from "@/lib/realtimeKlines";
@@ -32,6 +33,10 @@ const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
 
 function apiPath(path: string) {
   return `${BASE_PATH}${path}`;
+}
+
+function patternMatchKey(match: Pick<PatternMatch, "startTime" | "endTime">) {
+  return `${match.startTime}-${match.endTime}`;
 }
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -77,8 +82,22 @@ export function Dashboard() {
   const [symbolsLoading, setSymbolsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [selectedPatternMatchKey, setSelectedPatternMatchKey] =
+    useState<string | null>(null);
 
   const validSymbol = useMemo(() => /^[A-Z0-9]{5,20}$/.test(symbol), [symbol]);
+  const selectedPatternMatch = useMemo(() => {
+    const matches = patternMatches?.matches ?? [];
+
+    if (!matches.length) {
+      return null;
+    }
+
+    return (
+      matches.find((match) => patternMatchKey(match) === selectedPatternMatchKey) ??
+      matches[0]
+    );
+  }, [patternMatches, selectedPatternMatchKey]);
   const handleRealtimeTrades = useCallback(
     (trades: TradeTick[]) => {
       setKlines((currentKlines) =>
@@ -144,7 +163,22 @@ export function Dashboard() {
     setKlines([]);
     setPatterns(null);
     setPatternMatches(null);
+    setSelectedPatternMatchKey(null);
     setError(null);
+  }, []);
+
+  const handleSymbolChange = useCallback((nextSymbol: string) => {
+    setSymbol(nextSymbol);
+    setSelectedPatternMatchKey(null);
+  }, []);
+
+  const handleIntervalChange = useCallback((nextInterval: Interval) => {
+    setInterval(nextInterval);
+    setSelectedPatternMatchKey(null);
+  }, []);
+
+  const handleSelectPatternMatch = useCallback((match: PatternMatch) => {
+    setSelectedPatternMatchKey(patternMatchKey(match));
   }, []);
 
   const loadData = useCallback(
@@ -257,9 +291,13 @@ export function Dashboard() {
               disabled={symbolsLoading}
               symbols={symbols}
               value={symbol}
-              onChange={setSymbol}
+              onChange={handleSymbolChange}
             />
-            <IntervalSelector disabled={loading} value={interval} onChange={setInterval} />
+            <IntervalSelector
+              disabled={loading}
+              value={interval}
+              onChange={handleIntervalChange}
+            />
             <button
               className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
               disabled={loading}
@@ -293,6 +331,7 @@ export function Dashboard() {
             loading={loading}
             streamStatus={streamStatus}
             market={market}
+            projectionMatch={selectedPatternMatch}
             symbol={symbol}
           />
           <OverallSignalCard analysis={analysis} loading={loading} />
@@ -309,7 +348,14 @@ export function Dashboard() {
               loading={loading}
               patterns={patterns?.patterns ?? []}
             />
-            <HistoricalPatternMatcher data={patternMatches} loading={loading} />
+            <HistoricalPatternMatcher
+              data={patternMatches}
+              loading={loading}
+              selectedMatchKey={
+                selectedPatternMatch ? patternMatchKey(selectedPatternMatch) : null
+              }
+              onSelectMatch={handleSelectPatternMatch}
+            />
             <RiskWarningCard warnings={analysis.warnings} />
             <IndicatorExplanationTable modules={analysis.modules} />
           </>

@@ -11,6 +11,7 @@ Next.js dashboard for explaining crypto market signals from Binance spot and USD
 - Indicator explanation table with visual signal gauges.
 - K-line pattern detection for range, breakout, rejection, compression, and overheated conditions.
 - Historical pattern matcher that compares the current K-line window against recent historical windows.
+- Clickable historical matches with projected follow-up candles overlaid on the main chart.
 - Real-time chart updates from Binance spot or futures trade stream aggregation. REST initializes historical candles, then browser WebSocket trades update the active candle every 500ms.
 
 ## Scripts

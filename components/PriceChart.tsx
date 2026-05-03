@@ -11,6 +11,7 @@ import {
 import { BarChart3, Radio } from "lucide-react";
 import { calculateMA } from "@/lib/indicators";
 import { normalizeKlines } from "@/lib/klineGuards";
+import { PatternMatch } from "@/lib/patterns/patternTypes";
 import { Kline, MarketType } from "@/lib/types";
 
 interface PriceChartProps {
@@ -20,6 +21,7 @@ interface PriceChartProps {
   loading?: boolean;
   streamStatus?: "idle" | "connecting" | "live" | "reconnecting" | "error";
   lastTradeAt?: number | null;
+  projectionMatch?: PatternMatch | null;
 }
 
 function toChartTime(timestamp: number) {
@@ -55,13 +57,50 @@ function streamStatusClass(status?: PriceChartProps["streamStatus"]) {
   }
 }
 
+function buildProjectedCandles(klines: Kline[], match?: PatternMatch | null) {
+  const currentAnchor = klines.at(-1);
+  const historyWindow = normalizeKlines(match?.window ?? []);
+  const historyAnchor = historyWindow.at(-1);
+
+  if (
+    !match ||
+    !currentAnchor ||
+    !historyAnchor ||
+    currentAnchor.close <= 0 ||
+    historyAnchor.close <= 0
+  ) {
+    return [];
+  }
+
+  const scale = currentAnchor.close / historyAnchor.close;
+  const futureWindow = normalizeKlines(match.futureWindow)
+    .filter((kline) => kline.openTime > historyAnchor.openTime)
+    .slice(0, 24);
+
+  return futureWindow
+    .map((kline) => {
+      const projectedOpenTime =
+        currentAnchor.openTime + (kline.openTime - historyAnchor.openTime);
+
+      return {
+        time: toChartTime(projectedOpenTime),
+        open: kline.open * scale,
+        high: kline.high * scale,
+        low: kline.low * scale,
+        close: kline.close * scale
+      };
+    })
+    .filter((kline) => Number(kline.time) > toChartTime(currentAnchor.openTime));
+}
+
 export function PriceChart({
   klines,
   market,
   symbol,
   loading,
   streamStatus,
-  lastTradeAt
+  lastTradeAt,
+  projectionMatch
 }: PriceChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -69,8 +108,17 @@ export function PriceChart({
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const ma20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const ma50SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const projectionCandleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const didFitContentRef = useRef(false);
+  const previousProjectionKeyRef = useRef<string | null>(null);
   const chartKlines = useMemo(() => normalizeKlines(klines), [klines]);
+  const projectionCandles = useMemo(
+    () => buildProjectedCandles(chartKlines, projectionMatch),
+    [chartKlines, projectionMatch]
+  );
+  const projectionKey = projectionMatch
+    ? `${market}-${symbol}-${projectionMatch.startTime}-${projectionMatch.endTime}`
+    : null;
 
   useEffect(() => {
     if (!containerRef.current || chartRef.current || !chartKlines.length) {
@@ -137,6 +185,17 @@ export function PriceChart({
       lineWidth: 2,
       title: "MA50"
     });
+    const projectionCandleSeries = chart.addCandlestickSeries({
+      upColor: "rgba(20, 184, 166, 0.36)",
+      downColor: "rgba(244, 63, 94, 0.34)",
+      borderUpColor: "rgba(13, 148, 136, 0.72)",
+      borderDownColor: "rgba(225, 29, 72, 0.68)",
+      wickUpColor: "rgba(13, 148, 136, 0.72)",
+      wickDownColor: "rgba(225, 29, 72, 0.68)",
+      lastValueVisible: false,
+      priceLineVisible: false,
+      title: "Projection"
+    });
 
     chart.priceScale("volume").applyOptions({
       scaleMargins: {
@@ -150,6 +209,7 @@ export function PriceChart({
     volumeSeriesRef.current = volumeSeries;
     ma20SeriesRef.current = ma20Series;
     ma50SeriesRef.current = ma50Series;
+    projectionCandleSeriesRef.current = projectionCandleSeries;
 
     return () => {
       chart.remove();
@@ -158,7 +218,9 @@ export function PriceChart({
       volumeSeriesRef.current = null;
       ma20SeriesRef.current = null;
       ma50SeriesRef.current = null;
+      projectionCandleSeriesRef.current = null;
       didFitContentRef.current = false;
+      previousProjectionKeyRef.current = null;
     };
   }, [chartKlines.length]);
 
@@ -213,7 +275,26 @@ export function PriceChart({
   }, [chartKlines]);
 
   useEffect(() => {
+    if (!chartRef.current || !projectionCandleSeriesRef.current) {
+      return;
+    }
+
+    projectionCandleSeriesRef.current.setData(projectionCandles);
+
+    if (
+      projectionKey &&
+      projectionCandles.length &&
+      previousProjectionKeyRef.current !== projectionKey
+    ) {
+      chartRef.current.timeScale().fitContent();
+    }
+
+    previousProjectionKeyRef.current = projectionKey;
+  }, [projectionCandles, projectionKey]);
+
+  useEffect(() => {
     didFitContentRef.current = false;
+    previousProjectionKeyRef.current = null;
   }, [market, symbol]);
 
   return (
@@ -251,6 +332,12 @@ export function PriceChart({
             <span className="h-2 w-5 rounded bg-amber-500" />
             MA50
           </span>
+          {projectionMatch ? (
+            <span className="inline-flex items-center gap-1 text-teal-700">
+              <span className="h-2 w-5 rounded bg-teal-500/60" />
+              相似樣本投影
+            </span>
+          ) : null}
         </div>
       </div>
 

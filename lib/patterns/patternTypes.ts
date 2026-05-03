@@ -35,6 +35,7 @@ export interface PatternMatch {
   maxFutureUpside: number | null;
   maxFutureDrawdown: number | null;
   window: Kline[];
+  futureWindow: Kline[];
 }
 
 export interface PatternMatchSummary {
