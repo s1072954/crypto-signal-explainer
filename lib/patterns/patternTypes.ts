@@ -1,4 +1,4 @@
-import { Confidence, Direction, Interval, Kline } from "@/lib/types";
+import { Confidence, Direction, Interval, Kline, MarketType } from "@/lib/types";
 
 export interface DetectedPattern {
   key: string;
@@ -15,6 +15,7 @@ export interface DetectedPattern {
 
 export interface PatternDetectionResponse {
   symbol: string;
+  market: MarketType;
   interval: Interval;
   patterns: DetectedPattern[];
   updatedAt: string;
@@ -52,6 +53,7 @@ export interface PatternMatchSummary {
 
 export interface PatternMatchResponse {
   symbol: string;
+  market: MarketType;
   interval: Interval;
   lookback: number;
   topK: number;

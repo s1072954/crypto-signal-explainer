@@ -1,7 +1,7 @@
 import { calculateSimilarityScore } from "@/lib/patterns/similarity";
 import { roundStat, summarizeMatches } from "@/lib/patterns/patternStats";
 import { PatternMatch, PatternMatchResponse } from "@/lib/patterns/patternTypes";
-import { Interval, Kline } from "@/lib/types";
+import { Interval, Kline, MarketType } from "@/lib/types";
 
 function percentReturn(from: number, to: number) {
   if (!Number.isFinite(from) || from === 0 || !Number.isFinite(to)) {
@@ -44,6 +44,7 @@ function futureExtremes(klines: Kline[], windowEndIndex: number, horizon: number
 
 export function buildHistoricalPatternMatches(
   symbol: string,
+  market: MarketType,
   interval: Interval,
   klines: Kline[],
   lookback: number,
@@ -92,6 +93,7 @@ export function buildHistoricalPatternMatches(
 
   return {
     symbol,
+    market,
     interval,
     lookback: safeLookback,
     topK: safeTopK,

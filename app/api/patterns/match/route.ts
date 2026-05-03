@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSpotKlines } from "@/lib/binanceClient";
+import { getMarketKlines } from "@/lib/binanceClient";
 import { buildHistoricalPatternMatches } from "@/lib/patterns/matchPatterns";
-import { Interval, SUPPORTED_INTERVALS } from "@/lib/types";
+import {
+  Interval,
+  MarketType,
+  SUPPORTED_INTERVALS,
+  SUPPORTED_MARKETS
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 function isInterval(value: string | null): value is Interval {
   return SUPPORTED_INTERVALS.includes(value as Interval);
+}
+
+function isMarket(value: string | null): value is MarketType {
+  return SUPPORTED_MARKETS.includes(value as MarketType);
 }
 
 function cleanSymbol(value: string | null) {
@@ -32,6 +41,8 @@ function matchLimit(interval: Interval) {
 
 export async function GET(request: NextRequest) {
   const symbol = cleanSymbol(request.nextUrl.searchParams.get("symbol"));
+  const marketParam = request.nextUrl.searchParams.get("market");
+  const market = isMarket(marketParam) ? marketParam : "spot";
   const intervalParam = request.nextUrl.searchParams.get("interval");
   const interval = isInterval(intervalParam) ? intervalParam : "4h";
   const lookback = Math.min(
@@ -44,13 +55,14 @@ export async function GET(request: NextRequest) {
   );
 
   try {
-    const klines = await getSpotKlines(symbol, interval, matchLimit(interval));
+    const klines = await getMarketKlines(symbol, interval, matchLimit(interval), market);
 
     if (klines.length < lookback + 50) {
       return NextResponse.json(
         {
           error: "Not enough historical klines for pattern matching.",
           symbol,
+          market,
           interval,
           available: klines.length
         },
@@ -59,7 +71,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(
-      buildHistoricalPatternMatches(symbol, interval, klines, lookback, topK)
+      buildHistoricalPatternMatches(symbol, market, interval, klines, lookback, topK)
     );
   } catch (error) {
     console.error("Failed to match historical patterns", error);
@@ -68,6 +80,7 @@ export async function GET(request: NextRequest) {
       {
         error: "Unable to match historical patterns from Binance klines.",
         symbol,
+        market,
         interval
       },
       { status: 502 }

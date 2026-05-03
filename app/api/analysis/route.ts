@@ -4,10 +4,10 @@ import {
   getAggTrades,
   getFundingRate,
   getLongShortRatio,
+  getMarketKlines,
   getOpenInterest,
   getOpenInterestHistory,
   getOrderBook,
-  getSpotKlines,
   getTakerBuySellVolume
 } from "@/lib/binanceClient";
 import { buildOverallAnalysis } from "@/lib/signalEngine";
@@ -17,16 +17,22 @@ import {
   FuturesDataPeriod,
   Interval,
   Kline,
+  MarketType,
   OpenInterestHistoryPoint,
   OpenInterestSnapshot,
   RatioPoint,
-  SUPPORTED_INTERVALS
+  SUPPORTED_INTERVALS,
+  SUPPORTED_MARKETS
 } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 function isInterval(value: string | null): value is Interval {
   return SUPPORTED_INTERVALS.includes(value as Interval);
+}
+
+function isMarket(value: string | null): value is MarketType {
+  return SUPPORTED_MARKETS.includes(value as MarketType);
 }
 
 function cleanSymbol(value: string | null) {
@@ -86,23 +92,25 @@ async function optional<T>(promise: Promise<T>, fallback: T): Promise<T> {
 
 export async function GET(request: NextRequest) {
   const symbol = cleanSymbol(request.nextUrl.searchParams.get("symbol"));
+  const marketParam = request.nextUrl.searchParams.get("market");
+  const market = isMarket(marketParam) ? marketParam : "spot";
   const intervalParam = request.nextUrl.searchParams.get("interval");
   const interval = isInterval(intervalParam) ? intervalParam : "4h";
   const limit = analysisLimit(interval);
 
   try {
     const [klines, ticker, orderBook, aggTrades] = await Promise.all([
-      getSpotKlines(symbol, interval, limit),
-      get24hrTicker(symbol),
-      getOrderBook(symbol, 100),
-      getAggTrades(symbol, 500)
+      getMarketKlines(symbol, interval, limit, market),
+      get24hrTicker(symbol, market),
+      getOrderBook(symbol, 100, market),
+      getAggTrades(symbol, 500, market)
     ]);
     const futuresPeriod = futuresPeriodForInterval(interval);
     const benchmarkPromise: Promise<Kline[] | undefined> =
       symbol === "BTCUSDT"
         ? Promise.resolve(undefined)
         : optional<Kline[] | undefined>(
-            getSpotKlines("BTCUSDT", interval, limit),
+            getMarketKlines("BTCUSDT", interval, limit, market),
             undefined
           );
     const [
@@ -128,6 +136,7 @@ export async function GET(request: NextRequest) {
     ]);
     const input: AnalysisInput = {
       symbol,
+      market,
       interval,
       klines,
       ticker,
@@ -149,6 +158,7 @@ export async function GET(request: NextRequest) {
       {
         error: "Unable to build analysis from Binance data.",
         symbol,
+        market,
         interval
       },
       { status: 502 }

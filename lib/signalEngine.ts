@@ -146,6 +146,13 @@ function buildModule(
   };
 }
 
+function marketSource(input: AnalysisInput, dataset: string) {
+  const marketName =
+    input.market === "futures" ? "Binance USD-M Futures" : "Binance Spot";
+
+  return `${marketName} ${dataset}`;
+}
+
 export function analyzeTrend(input: AnalysisInput): ModuleAnalysis {
   const close = latestClose(input.klines);
   const ma20 = latestMA(input.klines, 20);
@@ -167,7 +174,7 @@ export function analyzeTrend(input: AnalysisInput): ModuleAnalysis {
         bullishInterpretation: "價格站上 MA20，短線買盤仍有支撐。",
         bearishInterpretation: "價格跌破 MA20，短線趨勢轉弱。",
         riskNote: "均線是落後指標，盤整時容易反覆翻多翻空。",
-        source: "Binance Spot Klines",
+        source: marketSource(input, "Klines"),
         applicableTimeframes: ALL_TIMEFRAMES
       })
     );
@@ -187,7 +194,7 @@ export function analyzeTrend(input: AnalysisInput): ModuleAnalysis {
         bullishInterpretation: "價格站上 MA50，中期趨勢較有延續性。",
         bearishInterpretation: "價格低於 MA50，中期反彈品質偏弱。",
         riskNote: "快速行情可能先走完一段後才反映到 MA50。",
-        source: "Binance Spot Klines",
+        source: marketSource(input, "Klines"),
         applicableTimeframes: ALL_TIMEFRAMES
       })
     );
@@ -207,7 +214,7 @@ export function analyzeTrend(input: AnalysisInput): ModuleAnalysis {
         bullishInterpretation: "短期均線在中期均線上方，趨勢結構偏多。",
         bearishInterpretation: "短期均線在中期均線下方，趨勢結構偏空。",
         riskNote: "均線交叉在震盪盤中容易出現假訊號。",
-        source: "Binance Spot Klines",
+        source: marketSource(input, "Klines"),
         applicableTimeframes: ALL_TIMEFRAMES
       })
     );
@@ -250,7 +257,7 @@ export function analyzeMomentum(input: AnalysisInput): ModuleAnalysis {
       bullishInterpretation: "24H 報酬為正，短期資金仍願意追價。",
       bearishInterpretation: "24H 報酬為負，短線賣壓占上風。",
       riskNote: "單日漲跌容易受消息與短線槓桿清算影響。",
-      source: "Binance 24hr Ticker"
+      source: marketSource(input, "24hr Ticker")
     })
   );
 
@@ -274,7 +281,7 @@ export function analyzeMomentum(input: AnalysisInput): ModuleAnalysis {
       bullishInterpretation: "7D 報酬為正，趨勢延續性較好。",
       bearishInterpretation: "7D 報酬為負，資金偏向撤出或觀望。",
       riskNote: "小週期資料不足時，7D 訊號可信度會下降。",
-      source: "Binance Spot Klines"
+      source: marketSource(input, "Klines")
     })
   );
 
@@ -298,7 +305,7 @@ export function analyzeMomentum(input: AnalysisInput): ModuleAnalysis {
       bullishInterpretation: "14D 報酬為正，波段仍偏強。",
       bearishInterpretation: "14D 報酬為負，波段結構偏弱。",
       riskNote: "15m 週期最多抓取 1000 根資料，可能不足 14 天。",
-      source: "Binance Spot Klines"
+      source: marketSource(input, "Klines")
     })
   );
 
@@ -317,7 +324,7 @@ export function analyzeMomentum(input: AnalysisInput): ModuleAnalysis {
         bullishInterpretation: "表現優於 BTC，資金偏好較強。",
         bearishInterpretation: "表現落後 BTC，資金偏好較弱。",
         riskNote: "相對強弱不代表絕對方向，BTC 急跌時仍可能同步下跌。",
-        source: "Binance Spot Klines"
+        source: marketSource(input, "Klines")
       })
     );
   }
@@ -342,7 +349,7 @@ export function analyzeMomentum(input: AnalysisInput): ModuleAnalysis {
         bullishInterpretation: "上漲伴隨放量，買盤確認度提高。",
         bearishInterpretation: "下跌伴隨放量，賣壓確認度提高。",
         riskNote: "放量不等於延續，清算與消息也會放大成交量。",
-        source: "Binance Spot Klines"
+        source: marketSource(input, "Klines")
       })
     );
   }
@@ -361,7 +368,7 @@ export function analyzeMomentum(input: AnalysisInput): ModuleAnalysis {
         bullishInterpretation: "RSI 高於 55，買盤動能較強。",
         bearishInterpretation: "RSI 低於 45，賣壓動能較強。",
         riskNote: "RSI 過高或過低都可能進入鈍化，不宜單獨使用。",
-        source: "Binance Spot Klines"
+        source: marketSource(input, "Klines")
       })
     );
   }
@@ -379,7 +386,7 @@ export function analyzeMomentum(input: AnalysisInput): ModuleAnalysis {
         bullishInterpretation: "柱狀體為正，動能偏向多方。",
         bearishInterpretation: "柱狀體為負，動能偏向空方。",
         riskNote: "MACD 也是落後指標，急速反轉時會延遲。",
-        source: "Binance Spot Klines"
+        source: marketSource(input, "Klines")
       })
     );
   }
@@ -553,7 +560,7 @@ export function analyzeLiquidity(input: AnalysisInput): ModuleAnalysis {
       bullishInterpretation: "價差較低，進出場滑價壓力較小。",
       bearishInterpretation: "價差擴大，市場深度或報價品質轉弱。",
       riskNote: "流動性差時，小額成交也可能造成明顯滑價。",
-      source: "Binance Spot Depth"
+      source: marketSource(input, "Depth")
     })
   );
 
@@ -581,7 +588,7 @@ export function analyzeLiquidity(input: AnalysisInput): ModuleAnalysis {
       bullishInterpretation: "深度充足，價格較不容易被小單推動。",
       bearishInterpretation: "深度不足，急漲急跌與滑價風險上升。",
       riskNote: "盤口深度會快速變動，也可能出現撤單。",
-      source: "Binance Spot Depth"
+      source: marketSource(input, "Depth")
     })
   );
 
@@ -609,7 +616,7 @@ export function analyzeLiquidity(input: AnalysisInput): ModuleAnalysis {
       bullishInterpretation: "買盤深度較厚，短線承接力較佳。",
       bearishInterpretation: "賣盤深度較厚，上方壓力較明顯。",
       riskNote: "掛單可以快速撤除，盤口訊號可信度低於成交訊號。",
-      source: "Binance Spot Depth"
+      source: marketSource(input, "Depth")
     })
   );
 
@@ -632,7 +639,7 @@ export function analyzeLiquidity(input: AnalysisInput): ModuleAnalysis {
       bullishInterpretation: "CVD 為正，主動買盤較強。",
       bearishInterpretation: "CVD 為負，主動賣盤較強。",
       riskNote: "近期 trades 只代表短線成交流，不代表完整日內資金。",
-      source: "Binance Spot Agg Trades"
+      source: marketSource(input, "Agg Trades")
     })
   );
 
@@ -776,6 +783,7 @@ export function buildOverallAnalysis(input: AnalysisInput): OverallAnalysis {
 
   return {
     symbol: input.symbol,
+    market: input.market,
     interval: input.interval,
     lastPrice: input.ticker.lastPrice || latestClose(input.klines),
     overallStatus: status,

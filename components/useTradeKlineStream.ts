@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { TradeTick } from "@/lib/realtimeKlines";
-import { Interval } from "@/lib/types";
+import { Interval, MarketType } from "@/lib/types";
 
 type StreamStatus = "idle" | "connecting" | "live" | "reconnecting" | "error";
 
 interface UseTradeKlineStreamOptions {
   enabled: boolean;
+  market: MarketType;
   symbol: string;
   interval: Interval;
   onTrades: (trades: TradeTick[]) => void;
@@ -23,6 +24,7 @@ interface BinanceTradePayload {
 
 export function useTradeKlineStream({
   enabled,
+  market,
   symbol,
   interval,
   onTrades
@@ -70,7 +72,11 @@ export function useTradeKlineStream({
       }
 
       const streamName = `${symbol.toLowerCase()}@trade`;
-      socket = new WebSocket(`wss://stream.binance.com:9443/ws/${streamName}`);
+      const streamBaseUrl =
+        market === "futures"
+          ? "wss://fstream.binance.com/ws"
+          : "wss://stream.binance.com:9443/ws";
+      socket = new WebSocket(`${streamBaseUrl}/${streamName}`);
       setStatus((current) => (current === "live" ? "reconnecting" : "connecting"));
 
       socket.onopen = () => {
@@ -143,7 +149,7 @@ export function useTradeKlineStream({
       socket?.close();
       bufferRef.current = [];
     };
-  }, [enabled, interval, symbol]);
+  }, [enabled, interval, market, symbol]);
 
   return {
     status,

@@ -4,6 +4,7 @@ import {
   FuturesDataPeriod,
   Interval,
   Kline,
+  MarketType,
   OpenInterestHistoryPoint,
   OpenInterestSnapshot,
   OrderBook,
@@ -14,6 +15,35 @@ import {
 const SPOT_BASE_URL = "https://api.binance.com/api/v3";
 const FUTURES_BASE_URL = "https://fapi.binance.com/fapi/v1";
 const FUTURES_DATA_BASE_URL = "https://fapi.binance.com/futures/data";
+
+const MARKET_ENDPOINTS: Record<
+  MarketType,
+  {
+    baseUrl: string;
+    exchangeInfoPath: string;
+    klinesPath: string;
+    ticker24hrPath: string;
+    depthPath: string;
+    aggTradesPath: string;
+  }
+> = {
+  spot: {
+    baseUrl: SPOT_BASE_URL,
+    exchangeInfoPath: "/api/v3/exchangeInfo",
+    klinesPath: "/api/v3/klines",
+    ticker24hrPath: "/api/v3/ticker/24hr",
+    depthPath: "/api/v3/depth",
+    aggTradesPath: "/api/v3/aggTrades"
+  },
+  futures: {
+    baseUrl: FUTURES_BASE_URL,
+    exchangeInfoPath: "/fapi/v1/exchangeInfo",
+    klinesPath: "/fapi/v1/klines",
+    ticker24hrPath: "/fapi/v1/ticker/24hr",
+    depthPath: "/fapi/v1/depth",
+    aggTradesPath: "/fapi/v1/aggTrades"
+  }
+};
 
 export const DEFAULT_SYMBOLS = [
   "BTCUSDT",
@@ -103,7 +133,11 @@ export async function getUsdtSpotSymbols() {
     }>;
   };
 
-  const url = buildUrl(SPOT_BASE_URL, "/api/v3/exchangeInfo", {});
+  const url = buildUrl(
+    MARKET_ENDPOINTS.spot.baseUrl,
+    MARKET_ENDPOINTS.spot.exchangeInfoPath,
+    {}
+  );
   const data = await fetchJson<ExchangeInfo>(url, 10 * 60_000);
 
   return data.symbols
@@ -126,13 +160,48 @@ export async function getUsdtSpotSymbols() {
     .sort();
 }
 
-export async function getSpotKlines(
+export async function getUsdtFuturesSymbols() {
+  type ExchangeInfo = {
+    symbols: Array<{
+      symbol: string;
+      status: string;
+      quoteAsset: string;
+      contractType?: string;
+    }>;
+  };
+
+  const url = buildUrl(
+    MARKET_ENDPOINTS.futures.baseUrl,
+    MARKET_ENDPOINTS.futures.exchangeInfoPath,
+    {}
+  );
+  const data = await fetchJson<ExchangeInfo>(url, 10 * 60_000);
+
+  return data.symbols
+    .filter(
+      (item) =>
+        item.status === "TRADING" &&
+        item.quoteAsset === "USDT" &&
+        item.contractType === "PERPETUAL" &&
+        /^[A-Z0-9]+USDT$/.test(item.symbol)
+    )
+    .map((item) => item.symbol)
+    .sort();
+}
+
+export async function getMarketSymbols(market: MarketType) {
+  return market === "futures" ? getUsdtFuturesSymbols() : getUsdtSpotSymbols();
+}
+
+export async function getMarketKlines(
   symbol: string,
   interval: Interval,
-  limit = 240
+  limit = 240,
+  market: MarketType = "spot"
 ): Promise<Kline[]> {
   const safeLimit = Math.min(Math.max(limit, 20), 1000);
-  const url = buildUrl(SPOT_BASE_URL, "/api/v3/klines", {
+  const endpoint = MARKET_ENDPOINTS[market];
+  const url = buildUrl(endpoint.baseUrl, endpoint.klinesPath, {
     symbol,
     interval,
     limit: safeLimit
@@ -142,7 +211,18 @@ export async function getSpotKlines(
   return rows.map(mapKline);
 }
 
-export async function get24hrTicker(symbol: string): Promise<Ticker24hr> {
+export async function getSpotKlines(
+  symbol: string,
+  interval: Interval,
+  limit = 240
+): Promise<Kline[]> {
+  return getMarketKlines(symbol, interval, limit, "spot");
+}
+
+export async function get24hrTicker(
+  symbol: string,
+  market: MarketType = "spot"
+): Promise<Ticker24hr> {
   type RawTicker = {
     symbol: string;
     lastPrice: string;
@@ -152,7 +232,8 @@ export async function get24hrTicker(symbol: string): Promise<Ticker24hr> {
     quoteVolume: string;
   };
 
-  const url = buildUrl(SPOT_BASE_URL, "/api/v3/ticker/24hr", { symbol });
+  const endpoint = MARKET_ENDPOINTS[market];
+  const url = buildUrl(endpoint.baseUrl, endpoint.ticker24hrPath, { symbol });
   const raw = await fetchJson<RawTicker>(url, 15_000);
 
   return {
@@ -165,14 +246,19 @@ export async function get24hrTicker(symbol: string): Promise<Ticker24hr> {
   };
 }
 
-export async function getOrderBook(symbol: string, limit = 100): Promise<OrderBook> {
+export async function getOrderBook(
+  symbol: string,
+  limit = 100,
+  market: MarketType = "spot"
+): Promise<OrderBook> {
   type RawOrderBook = {
     lastUpdateId: number;
     bids: [string, string][];
     asks: [string, string][];
   };
 
-  const url = buildUrl(SPOT_BASE_URL, "/api/v3/depth", {
+  const endpoint = MARKET_ENDPOINTS[market];
+  const url = buildUrl(endpoint.baseUrl, endpoint.depthPath, {
     symbol,
     limit
   });
@@ -191,7 +277,11 @@ export async function getOrderBook(symbol: string, limit = 100): Promise<OrderBo
   };
 }
 
-export async function getAggTrades(symbol: string, limit = 500): Promise<AggTrade[]> {
+export async function getAggTrades(
+  symbol: string,
+  limit = 500,
+  market: MarketType = "spot"
+): Promise<AggTrade[]> {
   type RawAggTrade = {
     a: number;
     p: string;
@@ -202,7 +292,8 @@ export async function getAggTrades(symbol: string, limit = 500): Promise<AggTrad
     m: boolean;
   };
 
-  const url = buildUrl(SPOT_BASE_URL, "/api/v3/aggTrades", {
+  const endpoint = MARKET_ENDPOINTS[market];
+  const url = buildUrl(endpoint.baseUrl, endpoint.aggTradesPath, {
     symbol,
     limit: Math.min(Math.max(limit, 50), 1000)
   });

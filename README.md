@@ -5,12 +5,13 @@ Next.js dashboard for explaining crypto market signals from Binance spot and USD
 ## Features
 
 - Symbol and interval selection for USDT pairs.
+- Market selection between Binance Spot and Binance USD-M Futures.
 - OHLCV chart with MA20 and MA50.
 - Signal modules for trend, momentum, derivatives, and liquidity.
 - Indicator explanation table with visual signal gauges.
 - K-line pattern detection for range, breakout, rejection, compression, and overheated conditions.
 - Historical pattern matcher that compares the current K-line window against recent historical windows.
-- Real-time chart updates from Binance trade stream aggregation. REST initializes historical candles, then browser WebSocket trades update the active candle every 500ms.
+- Real-time chart updates from Binance spot or futures trade stream aggregation. REST initializes historical candles, then browser WebSocket trades update the active candle every 500ms.
 
 ## Scripts
 
@@ -27,11 +28,15 @@ npm run start
 
 ```http
 GET /api/symbols
+GET /api/symbols?market=futures
 GET /api/klines?symbol=BTCUSDT&interval=4h&limit=240
+GET /api/klines?market=futures&symbol=BTCUSDT&interval=1m&limit=240
 GET /api/analysis?symbol=BTCUSDT&interval=4h
 GET /api/patterns/detect?symbol=BTCUSDT&interval=4h
 GET /api/patterns/match?symbol=BTCUSDT&interval=4h&lookback=60&topK=20
 ```
+
+`market` accepts `spot` or `futures`; omitted requests default to `spot`.
 
 ## Subpath Deployment
 

@@ -10,10 +10,11 @@ import {
 } from "lightweight-charts";
 import { BarChart3, Radio } from "lucide-react";
 import { calculateMA } from "@/lib/indicators";
-import { Kline } from "@/lib/types";
+import { Kline, MarketType } from "@/lib/types";
 
 interface PriceChartProps {
   klines: Kline[];
+  market: MarketType;
   symbol: string;
   loading?: boolean;
   streamStatus?: "idle" | "connecting" | "live" | "reconnecting" | "error";
@@ -55,6 +56,7 @@ function streamStatusClass(status?: PriceChartProps["streamStatus"]) {
 
 export function PriceChart({
   klines,
+  market,
   symbol,
   loading,
   streamStatus,
@@ -214,7 +216,9 @@ export function PriceChart({
     <section className="min-h-[34rem] rounded-lg border border-line bg-panel p-4 shadow-soft">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-ink">{symbol} 價格結構</h2>
+          <h2 className="text-base font-semibold text-ink">
+            {symbol} {market === "futures" ? "USD-M 合約" : "現貨"} K 線
+          </h2>
           <p className="text-sm text-slate-500">OHLCV、MA20、MA50</p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">

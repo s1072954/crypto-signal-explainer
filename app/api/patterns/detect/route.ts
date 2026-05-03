@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSpotKlines } from "@/lib/binanceClient";
+import { getMarketKlines } from "@/lib/binanceClient";
 import { detectPatterns } from "@/lib/patterns/detectPatterns";
-import { Interval, SUPPORTED_INTERVALS } from "@/lib/types";
+import {
+  Interval,
+  MarketType,
+  SUPPORTED_INTERVALS,
+  SUPPORTED_MARKETS
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 function isInterval(value: string | null): value is Interval {
   return SUPPORTED_INTERVALS.includes(value as Interval);
+}
+
+function isMarket(value: string | null): value is MarketType {
+  return SUPPORTED_MARKETS.includes(value as MarketType);
 }
 
 function cleanSymbol(value: string | null) {
@@ -35,14 +44,17 @@ function detectionLimit(interval: Interval) {
 
 export async function GET(request: NextRequest) {
   const symbol = cleanSymbol(request.nextUrl.searchParams.get("symbol"));
+  const marketParam = request.nextUrl.searchParams.get("market");
+  const market = isMarket(marketParam) ? marketParam : "spot";
   const intervalParam = request.nextUrl.searchParams.get("interval");
   const interval = isInterval(intervalParam) ? intervalParam : "4h";
 
   try {
-    const klines = await getSpotKlines(symbol, interval, detectionLimit(interval));
+    const klines = await getMarketKlines(symbol, interval, detectionLimit(interval), market);
 
     return NextResponse.json({
       symbol,
+      market,
       interval,
       patterns: detectPatterns(klines),
       updatedAt: new Date().toISOString()
@@ -54,6 +66,7 @@ export async function GET(request: NextRequest) {
       {
         error: "Unable to detect patterns from Binance klines.",
         symbol,
+        market,
         interval
       },
       { status: 502 }

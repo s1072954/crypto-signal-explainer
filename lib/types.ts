@@ -1,5 +1,9 @@
 export type Direction = "bullish" | "bearish" | "neutral" | "warning";
 
+export const SUPPORTED_MARKETS = ["spot", "futures"] as const;
+
+export type MarketType = (typeof SUPPORTED_MARKETS)[number];
+
 export type Confidence =
   | "high"
   | "medium_high"
@@ -143,6 +147,7 @@ export interface ModuleAnalysis {
 
 export interface OverallAnalysis {
   symbol: string;
+  market: MarketType;
   interval: Interval;
   lastPrice: number;
   overallStatus: string;
@@ -156,6 +161,7 @@ export interface OverallAnalysis {
 
 export interface KlinesResponse {
   symbol: string;
+  market: MarketType;
   interval: Interval;
   klines: Kline[];
 }
@@ -163,10 +169,12 @@ export interface KlinesResponse {
 export interface SymbolsResponse {
   symbols: string[];
   fallback: boolean;
+  market: MarketType;
 }
 
 export interface AnalysisInput {
   symbol: string;
+  market: MarketType;
   interval: Interval;
   klines: Kline[];
   ticker: Ticker24hr;

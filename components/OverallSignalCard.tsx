@@ -32,6 +32,10 @@ function statusClasses(status?: string) {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
+function marketLabel(market?: OverallAnalysis["market"]) {
+  return market === "futures" ? "USD-M Futures" : "Spot";
+}
+
 export function OverallSignalCard({
   analysis,
   loading
@@ -89,7 +93,13 @@ export function OverallSignalCard({
           </div>
         </div>
 
-        <dl className="grid grid-cols-2 gap-3 border-y border-slate-100 py-3">
+        <dl className="grid grid-cols-3 gap-3 border-y border-slate-100 py-3">
+          <div>
+            <dt className="text-xs font-medium uppercase text-slate-500">Market</dt>
+            <dd className="mt-1 text-base font-semibold text-ink">
+              {analysis ? marketLabel(analysis.market) : "-"}
+            </dd>
+          </div>
           <div>
             <dt className="text-xs font-medium uppercase text-slate-500">Last Price</dt>
             <dd className="mt-1 text-base font-semibold text-ink">

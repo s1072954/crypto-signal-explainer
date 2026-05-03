@@ -5,6 +5,7 @@ import { AlertCircle, BarChart3, RefreshCw, WifiOff } from "lucide-react";
 import { IndicatorExplanationTable } from "@/components/IndicatorExplanationTable";
 import { IndicatorModuleCard } from "@/components/IndicatorModuleCard";
 import { IntervalSelector } from "@/components/IntervalSelector";
+import { MarketSelector } from "@/components/MarketSelector";
 import { OverallSignalCard } from "@/components/OverallSignalCard";
 import { PriceChart } from "@/components/PriceChart";
 import { RiskWarningCard } from "@/components/RiskWarningCard";
@@ -16,6 +17,7 @@ import {
   Interval,
   Kline,
   KlinesResponse,
+  MarketType,
   OverallAnalysis,
   SymbolsResponse
 } from "@/lib/types";
@@ -63,6 +65,7 @@ async function fetchOptionalJson<T>(
 
 export function Dashboard() {
   const [symbols, setSymbols] = useState(DEFAULT_SYMBOLS);
+  const [market, setMarket] = useState<MarketType>("spot");
   const [symbol, setSymbol] = useState("BTCUSDT");
   const [interval, setInterval] = useState<Interval>("4h");
   const [analysis, setAnalysis] = useState<OverallAnalysis | null>(null);
@@ -88,9 +91,11 @@ export function Dashboard() {
     validSymbol &&
     Boolean(klines.length) &&
     analysis?.symbol === symbol &&
+    analysis?.market === market &&
     analysis?.interval === interval;
   const { status: streamStatus, lastTradeAt } = useTradeKlineStream({
     enabled: streamEnabled,
+    market,
     symbol,
     interval,
     onTrades: handleRealtimeTrades
@@ -99,13 +104,22 @@ export function Dashboard() {
   useEffect(() => {
     let active = true;
 
-    fetchJson<SymbolsResponse>(apiPath("/api/symbols"))
+    fetchJson<SymbolsResponse>(apiPath(`/api/symbols?market=${market}`))
       .then((payload) => {
         if (!active) {
           return;
         }
 
-        setSymbols(payload.symbols.length ? payload.symbols : DEFAULT_SYMBOLS);
+        const nextSymbols = payload.symbols.length ? payload.symbols : DEFAULT_SYMBOLS;
+
+        setSymbols(nextSymbols);
+        setSymbol((currentSymbol) =>
+          nextSymbols.includes(currentSymbol)
+            ? currentSymbol
+            : nextSymbols.includes("BTCUSDT")
+              ? "BTCUSDT"
+              : (nextSymbols[0] ?? "BTCUSDT")
+        );
       })
       .catch(() => {
         if (active) {
@@ -121,6 +135,16 @@ export function Dashboard() {
     return () => {
       active = false;
     };
+  }, [market]);
+
+  const handleMarketChange = useCallback((nextMarket: MarketType) => {
+    setMarket(nextMarket);
+    setSymbolsLoading(true);
+    setAnalysis(null);
+    setKlines([]);
+    setPatterns(null);
+    setPatternMatches(null);
+    setError(null);
   }, []);
 
   const loadData = useCallback(
@@ -139,23 +163,33 @@ export function Dashboard() {
         const [analysisPayload, klinesPayload, patternsPayload, matchesPayload] =
           await Promise.all([
           fetchJson<OverallAnalysis>(
-            apiPath(`/api/analysis?symbol=${encodeURIComponent(symbol)}&interval=${interval}`),
+            apiPath(
+              `/api/analysis?market=${market}&symbol=${encodeURIComponent(
+                symbol
+              )}&interval=${interval}`
+            ),
             signal
           ),
           fetchJson<KlinesResponse>(
-            apiPath(`/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=240`),
+            apiPath(
+              `/api/klines?market=${market}&symbol=${encodeURIComponent(
+                symbol
+              )}&interval=${interval}&limit=240`
+            ),
             signal
           ),
           fetchOptionalJson<PatternDetectionResponse | null>(
             apiPath(
-              `/api/patterns/detect?symbol=${encodeURIComponent(symbol)}&interval=${interval}`
+              `/api/patterns/detect?market=${market}&symbol=${encodeURIComponent(
+                symbol
+              )}&interval=${interval}`
             ),
             null,
             signal
           ),
           fetchOptionalJson<PatternMatchResponse | null>(
             apiPath(
-              `/api/patterns/match?symbol=${encodeURIComponent(
+              `/api/patterns/match?market=${market}&symbol=${encodeURIComponent(
                 symbol
               )}&interval=${interval}&lookback=60&topK=20`
             ),
@@ -180,7 +214,7 @@ export function Dashboard() {
         }
       }
     },
-    [interval, symbol, validSymbol]
+    [interval, market, symbol, validSymbol]
   );
 
   useEffect(() => {
@@ -214,6 +248,11 @@ export function Dashboard() {
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <MarketSelector
+              disabled={loading}
+              value={market}
+              onChange={handleMarketChange}
+            />
             <SymbolSelector
               disabled={symbolsLoading}
               symbols={symbols}
@@ -253,6 +292,7 @@ export function Dashboard() {
             lastTradeAt={lastTradeAt}
             loading={loading}
             streamStatus={streamStatus}
+            market={market}
             symbol={symbol}
           />
           <OverallSignalCard analysis={analysis} loading={loading} />
