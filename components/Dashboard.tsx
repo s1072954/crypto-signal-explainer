@@ -11,6 +11,7 @@ import { RiskWarningCard } from "@/components/RiskWarningCard";
 import { SymbolSelector } from "@/components/SymbolSelector";
 import { PatternDetectionCard } from "@/components/patterns/PatternDetectionCard";
 import { HistoricalPatternMatcher } from "@/components/patterns/HistoricalPatternMatcher";
+import { useTradeKlineStream } from "@/components/useTradeKlineStream";
 import {
   Interval,
   Kline,
@@ -22,6 +23,7 @@ import {
   PatternDetectionResponse,
   PatternMatchResponse
 } from "@/lib/patterns/patternTypes";
+import { aggregateTradesIntoKlines, TradeTick } from "@/lib/realtimeKlines";
 
 const DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT"];
 const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
@@ -74,6 +76,25 @@ export function Dashboard() {
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   const validSymbol = useMemo(() => /^[A-Z0-9]{5,20}$/.test(symbol), [symbol]);
+  const handleRealtimeTrades = useCallback(
+    (trades: TradeTick[]) => {
+      setKlines((currentKlines) =>
+        aggregateTradesIntoKlines(currentKlines, trades, interval, 240)
+      );
+    },
+    [interval]
+  );
+  const streamEnabled =
+    validSymbol &&
+    Boolean(klines.length) &&
+    analysis?.symbol === symbol &&
+    analysis?.interval === interval;
+  const { status: streamStatus, lastTradeAt } = useTradeKlineStream({
+    enabled: streamEnabled,
+    symbol,
+    interval,
+    onTrades: handleRealtimeTrades
+  });
 
   useEffect(() => {
     let active = true;
@@ -227,7 +248,13 @@ export function Dashboard() {
         ) : null}
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
-          <PriceChart klines={klines} loading={loading} symbol={symbol} />
+          <PriceChart
+            klines={klines}
+            lastTradeAt={lastTradeAt}
+            loading={loading}
+            streamStatus={streamStatus}
+            symbol={symbol}
+          />
           <OverallSignalCard analysis={analysis} loading={loading} />
         </div>
 
