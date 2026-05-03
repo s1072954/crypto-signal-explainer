@@ -11,7 +11,8 @@ import { PriceChart } from "@/components/PriceChart";
 import { RiskWarningCard } from "@/components/RiskWarningCard";
 import { SymbolSelector } from "@/components/SymbolSelector";
 import { PatternDetectionCard } from "@/components/patterns/PatternDetectionCard";
-import { HistoricalPatternMatcher } from "@/components/patterns/HistoricalPatternMatcher";
+import { PatternMatchList } from "@/components/patterns/PatternMatchList";
+import { PatternMatchSummaryCard } from "@/components/patterns/PatternMatchSummaryCard";
 import { useTradeKlineStream } from "@/components/useTradeKlineStream";
 import {
   Interval,
@@ -26,6 +27,7 @@ import {
   PatternMatch,
   PatternMatchResponse
 } from "@/lib/patterns/patternTypes";
+import { normalizeKlines } from "@/lib/klineGuards";
 import { aggregateTradesIntoKlines, TradeTick } from "@/lib/realtimeKlines";
 
 const DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT"];
@@ -37,6 +39,48 @@ function apiPath(path: string) {
 
 function patternMatchKey(match: Pick<PatternMatch, "startTime" | "endTime">) {
   return `${match.startTime}-${match.endTime}`;
+}
+
+interface PatternProjectionSnapshot {
+  key: string;
+  match: PatternMatch;
+  klines: Kline[];
+}
+
+function buildProjectedKlines(currentKlines: Kline[], match: PatternMatch) {
+  const chartKlines = normalizeKlines(currentKlines);
+  const currentAnchor = chartKlines.at(-1);
+  const historyWindow = normalizeKlines(match.window);
+  const historyAnchor = historyWindow.at(-1);
+
+  if (
+    !currentAnchor ||
+    !historyAnchor ||
+    currentAnchor.close <= 0 ||
+    historyAnchor.close <= 0
+  ) {
+    return [];
+  }
+
+  const scale = currentAnchor.close / historyAnchor.close;
+
+  return normalizeKlines(match.futureWindow)
+    .filter((kline) => kline.openTime > historyAnchor.openTime)
+    .slice(0, 24)
+    .map((kline) => {
+      const projectedOpenTime =
+        currentAnchor.openTime + (kline.openTime - historyAnchor.openTime);
+
+      return {
+        openTime: projectedOpenTime,
+        open: kline.open * scale,
+        high: kline.high * scale,
+        low: kline.low * scale,
+        close: kline.close * scale,
+        volume: kline.volume,
+        closeTime: projectedOpenTime + (kline.closeTime - kline.openTime)
+      };
+    });
 }
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -84,20 +128,10 @@ export function Dashboard() {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [selectedPatternMatchKey, setSelectedPatternMatchKey] =
     useState<string | null>(null);
+  const [patternProjection, setPatternProjection] =
+    useState<PatternProjectionSnapshot | null>(null);
 
   const validSymbol = useMemo(() => /^[A-Z0-9]{5,20}$/.test(symbol), [symbol]);
-  const selectedPatternMatch = useMemo(() => {
-    const matches = patternMatches?.matches ?? [];
-
-    if (!matches.length) {
-      return null;
-    }
-
-    return (
-      matches.find((match) => patternMatchKey(match) === selectedPatternMatchKey) ??
-      matches[0]
-    );
-  }, [patternMatches, selectedPatternMatchKey]);
   const handleRealtimeTrades = useCallback(
     (trades: TradeTick[]) => {
       setKlines((currentKlines) =>
@@ -164,22 +198,35 @@ export function Dashboard() {
     setPatterns(null);
     setPatternMatches(null);
     setSelectedPatternMatchKey(null);
+    setPatternProjection(null);
     setError(null);
   }, []);
 
   const handleSymbolChange = useCallback((nextSymbol: string) => {
     setSymbol(nextSymbol);
     setSelectedPatternMatchKey(null);
+    setPatternProjection(null);
   }, []);
 
   const handleIntervalChange = useCallback((nextInterval: Interval) => {
     setInterval(nextInterval);
     setSelectedPatternMatchKey(null);
+    setPatternProjection(null);
   }, []);
 
-  const handleSelectPatternMatch = useCallback((match: PatternMatch) => {
-    setSelectedPatternMatchKey(patternMatchKey(match));
-  }, []);
+  const handleSelectPatternMatch = useCallback(
+    (match: PatternMatch) => {
+      const key = patternMatchKey(match);
+
+      setSelectedPatternMatchKey(key);
+      setPatternProjection({
+        key,
+        match,
+        klines: buildProjectedKlines(klines, match)
+      });
+    },
+    [klines]
+  );
 
   const loadData = useCallback(
     async (signal?: AbortSignal) => {
@@ -236,6 +283,21 @@ export function Dashboard() {
         setKlines(klinesPayload.klines);
         setPatterns(patternsPayload);
         setPatternMatches(matchesPayload);
+        const defaultMatch = matchesPayload?.matches[0] ?? null;
+
+        if (defaultMatch) {
+          const key = patternMatchKey(defaultMatch);
+
+          setSelectedPatternMatchKey(key);
+          setPatternProjection({
+            key,
+            match: defaultMatch,
+            klines: buildProjectedKlines(klinesPayload.klines, defaultMatch)
+          });
+        } else {
+          setSelectedPatternMatchKey(null);
+          setPatternProjection(null);
+        }
       } catch (loadError) {
         if ((loadError as Error).name === "AbortError") {
           return;
@@ -324,17 +386,37 @@ export function Dashboard() {
           </div>
         ) : null}
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
           <PriceChart
             klines={klines}
             lastTradeAt={lastTradeAt}
             loading={loading}
             streamStatus={streamStatus}
             market={market}
-            projectionMatch={selectedPatternMatch}
+            projectionKlines={patternProjection?.klines ?? []}
+            projectionMatch={patternProjection?.match ?? null}
             symbol={symbol}
           />
+          {patternMatches?.matches.length ? (
+            <PatternMatchList
+              compact
+              matches={patternMatches.matches}
+              selectedMatchKey={patternProjection?.key ?? selectedPatternMatchKey}
+              onSelectMatch={handleSelectPatternMatch}
+            />
+          ) : (
+            <section className="flex min-h-[34rem] items-center justify-center rounded-lg border border-line bg-panel p-5 text-sm text-slate-500 shadow-soft">
+              {loading ? "正在建立歷史相似樣本。" : "目前沒有足夠的歷史樣本。"}
+            </section>
+          )}
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[24rem_minmax(0,1fr)]">
           <OverallSignalCard analysis={analysis} loading={loading} />
+          <PatternMatchSummaryCard
+            loading={loading}
+            summary={patternMatches?.summary ?? null}
+          />
         </div>
 
         {analysis ? (
@@ -347,14 +429,6 @@ export function Dashboard() {
             <PatternDetectionCard
               loading={loading}
               patterns={patterns?.patterns ?? []}
-            />
-            <HistoricalPatternMatcher
-              data={patternMatches}
-              loading={loading}
-              selectedMatchKey={
-                selectedPatternMatch ? patternMatchKey(selectedPatternMatch) : null
-              }
-              onSelectMatch={handleSelectPatternMatch}
             />
             <RiskWarningCard warnings={analysis.warnings} />
             <IndicatorExplanationTable modules={analysis.modules} />

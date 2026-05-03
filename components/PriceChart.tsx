@@ -22,6 +22,7 @@ interface PriceChartProps {
   streamStatus?: "idle" | "connecting" | "live" | "reconnecting" | "error";
   lastTradeAt?: number | null;
   projectionMatch?: PatternMatch | null;
+  projectionKlines?: Kline[];
 }
 
 function toChartTime(timestamp: number) {
@@ -57,42 +58,6 @@ function streamStatusClass(status?: PriceChartProps["streamStatus"]) {
   }
 }
 
-function buildProjectedCandles(klines: Kline[], match?: PatternMatch | null) {
-  const currentAnchor = klines.at(-1);
-  const historyWindow = normalizeKlines(match?.window ?? []);
-  const historyAnchor = historyWindow.at(-1);
-
-  if (
-    !match ||
-    !currentAnchor ||
-    !historyAnchor ||
-    currentAnchor.close <= 0 ||
-    historyAnchor.close <= 0
-  ) {
-    return [];
-  }
-
-  const scale = currentAnchor.close / historyAnchor.close;
-  const futureWindow = normalizeKlines(match.futureWindow)
-    .filter((kline) => kline.openTime > historyAnchor.openTime)
-    .slice(0, 24);
-
-  return futureWindow
-    .map((kline) => {
-      const projectedOpenTime =
-        currentAnchor.openTime + (kline.openTime - historyAnchor.openTime);
-
-      return {
-        time: toChartTime(projectedOpenTime),
-        open: kline.open * scale,
-        high: kline.high * scale,
-        low: kline.low * scale,
-        close: kline.close * scale
-      };
-    })
-    .filter((kline) => Number(kline.time) > toChartTime(currentAnchor.openTime));
-}
-
 export function PriceChart({
   klines,
   market,
@@ -100,7 +65,8 @@ export function PriceChart({
   loading,
   streamStatus,
   lastTradeAt,
-  projectionMatch
+  projectionMatch,
+  projectionKlines = []
 }: PriceChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -112,16 +78,24 @@ export function PriceChart({
   const didFitContentRef = useRef(false);
   const previousProjectionKeyRef = useRef<string | null>(null);
   const chartKlines = useMemo(() => normalizeKlines(klines), [klines]);
+  const hasChartData = chartKlines.length > 0;
   const projectionCandles = useMemo(
-    () => buildProjectedCandles(chartKlines, projectionMatch),
-    [chartKlines, projectionMatch]
+    () =>
+      normalizeKlines(projectionKlines).map((kline) => ({
+        time: toChartTime(kline.openTime),
+        open: kline.open,
+        high: kline.high,
+        low: kline.low,
+        close: kline.close
+      })),
+    [projectionKlines]
   );
   const projectionKey = projectionMatch
-    ? `${market}-${symbol}-${projectionMatch.startTime}-${projectionMatch.endTime}`
+    ? `${market}-${symbol}-${projectionMatch.matchedInterval}-${projectionMatch.startTime}-${projectionMatch.endTime}`
     : null;
 
   useEffect(() => {
-    if (!containerRef.current || chartRef.current || !chartKlines.length) {
+    if (!containerRef.current || chartRef.current || !hasChartData) {
       return;
     }
 
@@ -222,7 +196,7 @@ export function PriceChart({
       didFitContentRef.current = false;
       previousProjectionKeyRef.current = null;
     };
-  }, [chartKlines.length]);
+  }, [hasChartData]);
 
   useEffect(() => {
     if (
@@ -235,6 +209,11 @@ export function PriceChart({
     ) {
       return;
     }
+
+    const timeScale = chartRef.current.timeScale();
+    const visibleLogicalRange = didFitContentRef.current
+      ? timeScale.getVisibleLogicalRange()
+      : null;
 
     candleSeriesRef.current.setData(
       chartKlines.map((kline) => ({
@@ -269,8 +248,10 @@ export function PriceChart({
     );
 
     if (!didFitContentRef.current) {
-      chartRef.current.timeScale().fitContent();
+      timeScale.fitContent();
       didFitContentRef.current = true;
+    } else if (visibleLogicalRange) {
+      timeScale.setVisibleLogicalRange(visibleLogicalRange);
     }
   }, [chartKlines]);
 
