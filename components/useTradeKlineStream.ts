@@ -62,7 +62,7 @@ export function useTradeKlineStream({
 
       bufferRef.current = [];
       onTradesRef.current(trades);
-    }, 1000);
+    }, 500);
 
     const connect = () => {
       if (stopped) {
